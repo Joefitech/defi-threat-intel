@@ -20,9 +20,9 @@ interface Incident {
 export default function IncidentDetailPage({
   params,
 }: {
-  params: Promise<{ slug: string }> | { slug: string }
+  params: Promise<{ slug: string }>
 }) {
-  const resolvedParams = params instanceof Promise ? use(params) : params
+  const resolvedParams = use(params)
   const slug = resolvedParams?.slug
 
   const [incident, setIncident] = useState<Incident | null>(null)
@@ -128,7 +128,7 @@ export default function IncidentDetailPage({
           </Card>
         </div>
 
-        {/* TipTap Rich Text Content & Diagram Body */}
+        {/* Content Body & Diagram */}
         <div className="bg-neutral-950 border border-amber-500/20 rounded-xl p-6 md:p-8 space-y-6 shadow-2xl">
           <h3 className="text-xs font-semibold tracking-wider text-amber-500 uppercase border-b border-neutral-900 pb-2">
             Technical Analysis & Exploitation Flow
