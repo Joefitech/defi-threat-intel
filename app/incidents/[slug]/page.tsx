@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,13 +18,9 @@ interface Incident {
   created_at: string
 }
 
-export default function IncidentDetailPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const resolvedParams = use(params)
-  const slug = resolvedParams?.slug
+export default function IncidentDetailPage() {
+  const params = useParams()
+  const slug = typeof params?.slug === 'string' ? params.slug : ''
 
   const [incident, setIncident] = useState<Incident | null>(null)
   const [loading, setLoading] = useState(true)
