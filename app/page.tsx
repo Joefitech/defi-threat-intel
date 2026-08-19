@@ -53,26 +53,18 @@ export default function HomePage() {
   const totalIncidents = incidents.length
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-10 font-sans">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-black text-white p-6 md:p-10 font-sans flex flex-col justify-between">
+      <div className="max-w-6xl mx-auto space-y-8 w-full">
         
-        {/* Header / Navigation */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-amber-500/20 pb-6">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-              <span className="w-3 h-3 bg-amber-500 rounded-full animate-pulse shadow-[0_0_10px_#f59e0b]"></span>
-              DeFi Threat Intelligence Feed
-            </h1>
-            <p className="text-sm text-neutral-400 mt-1">
-              Real-time repository of decentralized finance security exploits, post-mortems, and attack vectors.
-            </p>
-          </div>
-          <Link 
-            href="/admin/dashboard" 
-            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider rounded-md transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-          >
-            + Publish Incident
-          </Link>
+        {/* Header / Navigation (Clean Public View) */}
+        <div className="border-b border-amber-500/20 pb-6">
+          <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+            <span className="w-3 h-3 bg-amber-500 rounded-full animate-pulse shadow-[0_0_10px_#f59e0b]"></span>
+            DeFi Threat Intelligence Feed
+          </h1>
+          <p className="text-sm text-neutral-400 mt-1">
+            Real-time repository of decentralized finance security exploits, post-mortems, and attack vectors.
+          </p>
         </div>
 
         {/* Macro Metrics */}
@@ -178,6 +170,17 @@ export default function HomePage() {
         )}
 
       </div>
+
+      {/* Footer with Discreet Admin Portal Link */}
+      <footer className="max-w-6xl mx-auto w-full pt-12 pb-4 mt-12 border-t border-neutral-900 flex justify-between items-center text-xs text-neutral-600">
+        <span>DeFi Threat Intelligence Feed</span>
+        <Link 
+          href="/admin/dashboard" 
+          className="text-neutral-600 hover:text-amber-500 transition-colors"
+        >
+          Admin Portal
+        </Link>
+      </footer>
     </div>
   )
 }
