@@ -20,6 +20,10 @@ export default function AdminDashboard() {
   const [chain, setChain] = useState('Ethereum')
   const [loss, setLoss] = useState('')
   const [attackVector, setAttackVector] = useState('')
+  const [dateOfHack, setDateOfHack] = useState('')
+  const [impactLevel, setImpactLevel] = useState('Critical')
+  const [downstreamProtocols, setDownstreamProtocols] = useState('')
+  const [sources, setSources] = useState('')
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [incidents, setIncidents] = useState<Incident[]>([])
@@ -50,6 +54,10 @@ export default function AdminDashboard() {
         chain,
         loss_usd: Number(loss) || 0,
         attack_vector: attackVector,
+        date_of_hack: dateOfHack || null,
+        impact_level: impactLevel,
+        downstream_protocols: downstreamProtocols,
+        sources,
         content,
         status: 'published'
       }
@@ -65,6 +73,10 @@ export default function AdminDashboard() {
       setProtocol('')
       setLoss('')
       setAttackVector('')
+      setDateOfHack('')
+      setImpactLevel('Critical')
+      setDownstreamProtocols('')
+      setSources('')
       setContent('')
       fetchIncidents()
     }
@@ -156,6 +168,36 @@ export default function AdminDashboard() {
                     className="w-full h-10 px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium placeholder:text-neutral-500"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold tracking-wider text-amber-500/80 uppercase">
+                    Date of Hack
+                  </label>
+                  <input 
+                    type="date"
+                    value={dateOfHack} 
+                    onChange={(e) => setDateOfHack(e.target.value)}
+                    style={inputStyle}
+                    className="w-full h-10 px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold tracking-wider text-amber-500/80 uppercase">
+                    Impact Severity
+                  </label>
+                  <select 
+                    value={impactLevel} 
+                    onChange={(e) => setImpactLevel(e.target.value)}
+                    style={inputStyle}
+                    className="w-full h-10 px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                  >
+                    <option value="Critical">Critical (Complete Drain / Core Exploited)</option>
+                    <option value="High">High (Partial Loss / High Risk)</option>
+                    <option value="Medium">Medium (Oracle / Transient Debt)</option>
+                    <option value="Low">Low (Informational / Unused Contract)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -169,6 +211,33 @@ export default function AdminDashboard() {
                   style={inputStyle}
                   className="w-full h-10 px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium placeholder:text-neutral-500"
                   required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold tracking-wider text-amber-500/80 uppercase">
+                  Downstream Impacted Protocols
+                </label>
+                <input 
+                  placeholder="e.g., Aave v3, Curve pools, Yearn vaults" 
+                  value={downstreamProtocols} 
+                  onChange={(e) => setDownstreamProtocols(e.target.value)}
+                  style={inputStyle}
+                  className="w-full h-10 px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium placeholder:text-neutral-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold tracking-wider text-amber-500/80 uppercase">
+                  Aggregated Sources & References
+                </label>
+                <textarea 
+                  placeholder="e.g., PeckShield Twitter alert, Etherscan tx hash, Protocol Post-Mortem link" 
+                  rows={2}
+                  value={sources} 
+                  onChange={(e) => setSources(e.target.value)}
+                  style={inputStyle}
+                  className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium placeholder:text-neutral-500"
                 />
               </div>
 
