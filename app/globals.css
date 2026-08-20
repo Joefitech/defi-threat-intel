@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -128,5 +126,39 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* =========================================================
+   DIAGRAM & INLINE THREAT IMAGE STYLING (EDITOR + PUBLISHED)
+   ========================================================= */
+
+.prose img,
+[contenteditable="true"] img,
+.rich-editor img {
+  max-width: 70% !important;
+  max-height: 440px !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 2rem auto !important;
+  display: block !important;
+  border-radius: 0.75rem !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+  background-color: #030303 !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.9) !important;
+  object-fit: contain !important;
+  transition: border-color 0.2s ease;
+}
+
+.prose img:hover {
+  border-color: rgba(245, 158, 11, 0.7) !important;
+}
+
+@media (max-width: 768px) {
+  .prose img,
+  [contenteditable="true"] img,
+  .rich-editor img {
+    max-width: 100% !important;
+    max-height: 320px !important;
   }
 }
