@@ -113,7 +113,7 @@ export default function AdminDashboardPage() {
     const cleanedAttackChain = attackChain.filter(step => step.trim().length > 0)
     const cleanedDefensiveControls = defensiveControls.filter(ctrl => ctrl.trim().length > 0)
 
-    const payload = {
+    const payload: Record<string, any> = {
       title,
       slug: `${slug}-${Date.now().toString().slice(-4)}`,
       protocol_name: protocolName,
@@ -121,7 +121,7 @@ export default function AdminDashboardPage() {
       chain: finalChain,
       loss_usd: parseFloat(lossUsd) || 0,
       attack_vector: vectorString,
-      date_of_hack: dateOfHack,
+      date_of_hack: dateOfHack ? dateOfHack : null,
       impact_level: impactLevel,
       downstream_protocols: downstreamProtocols,
       sources,
@@ -141,8 +141,6 @@ export default function AdminDashboardPage() {
     }
     setSubmitting(false)
   }
-
-  const activeChainObj = CHAIN_PRESETS.find(c => c.name === selectedChain)
 
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-10 font-sans">
@@ -280,7 +278,7 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Section 2: Attack Vector Classification (Multi-Select Tag Box) */}
+          {/* Section 2: Attack Vector Classification Tags */}
           <Card className="bg-neutral-950 border-amber-500/20 text-white">
             <CardHeader className="pb-3 border-b border-neutral-900">
               <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
@@ -453,7 +451,7 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Section 4: Auxiliary Sources & Full Technical Analysis */}
+          {/* Section 4: Downstream Impact, Sources & Narrative Body */}
           <Card className="bg-neutral-950 border-amber-500/20 text-white">
             <CardHeader className="pb-3 border-b border-neutral-900">
               <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
