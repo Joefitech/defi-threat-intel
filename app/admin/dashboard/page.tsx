@@ -36,6 +36,7 @@ export default function AdminDashboardPage() {
   const [title, setTitle] = useState('')
   const [protocolName, setProtocolName] = useState('')
   const [protocolLogoUrl, setProtocolLogoUrl] = useState('')
+  const [imageUrl, setImageUrl] = useState('') // Restored Image/JPEG attachment state
   const [selectedChain, setSelectedChain] = useState('Ethereum')
   const [customChain, setCustomChain] = useState('')
   const [lossUsd, setLossUsd] = useState('')
@@ -100,6 +101,13 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // Quick action: Insert image HTML tag into content body
+  const insertImageToContent = () => {
+    if (!imageUrl) return
+    const imgTag = `\n<img src="${imageUrl}" alt="Threat Diagram" class="w-full rounded-lg my-4 border border-neutral-800" />\n`
+    setContent(prev => prev + imgTag)
+  }
+
   // Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -118,6 +126,7 @@ export default function AdminDashboardPage() {
       slug: `${slug}-${Date.now().toString().slice(-4)}`,
       protocol_name: protocolName,
       protocol_logo_url: protocolLogoUrl,
+      image_url: imageUrl, // Included in DB insert payload
       chain: finalChain,
       loss_usd: parseFloat(lossUsd) || 0,
       attack_vector: vectorString,
@@ -451,11 +460,11 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Section 4: Downstream Impact, Sources & Narrative Body */}
+          {/* Section 4: Downstream Impact, Media & Narrative Body */}
           <Card className="bg-neutral-950 border-amber-500/20 text-white">
             <CardHeader className="pb-3 border-b border-neutral-900">
               <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
-                4. Downstream Impact, Sources & Narrative Body
+                4. Downstream Impact, Media Attachments & Narrative Body
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
@@ -469,6 +478,47 @@ export default function AdminDashboardPage() {
                   onChange={e => setDownstreamProtocols(e.target.value)}
                   className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
                 />
+              </div>
+
+              {/* RESTORED: Image/JPEG Attachment Field */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-amber-500/80">
+                    🖼️ INCIDENT ARCHITECTURE / DIAGRAM IMAGE URL (JPEG / PNG)
+                  </label>
+                  {imageUrl && (
+                    <button 
+                      type="button"
+                      onClick={insertImageToContent}
+                      className="text-[11px] text-amber-400 hover:text-amber-300 underline font-bold"
+                    >
+                      + Embed Image into Technical Body
+                    </button>
+                  )}
+                </div>
+                <input 
+                  type="url" 
+                  placeholder="https://.../exploit-diagram.jpeg" 
+                  value={imageUrl} 
+                  onChange={e => setImageUrl(e.target.value)}
+                  className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                />
+                
+                {/* Live Image Attachment Preview */}
+                {imageUrl && (
+                  <div className="mt-2 p-2 bg-neutral-900/50 border border-neutral-800 rounded flex items-center gap-3">
+                    <img 
+                      src={imageUrl} 
+                      alt="Attachment Preview" 
+                      className="w-20 h-14 object-cover rounded border border-amber-500/30"
+                      onError={(e) => (e.currentTarget.style.display = 'none')}
+                    />
+                    <div className="text-xs text-neutral-400 truncate">
+                      <span className="text-amber-400 font-bold block">Preview Attached:</span>
+                      {imageUrl}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
