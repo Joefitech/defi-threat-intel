@@ -37,8 +37,12 @@ export default function AdminDashboardPage() {
   const [protocolName, setProtocolName] = useState('')
   const [protocolLogoUrl, setProtocolLogoUrl] = useState('')
   const [uploadingImage, setUploadingImage] = useState(false)
+  
+  // Blockchain Network State
+  const [chains, setChains] = useState(CHAIN_PRESETS)
   const [selectedChain, setSelectedChain] = useState('Ethereum')
-  const [customChain] = useState('')
+  const [customChainInput, setCustomChainInput] = useState('')
+
   const [lossUsd, setLossUsd] = useState('')
   const [dateOfHack, setDateOfHack] = useState('')
   const [impactLevel, setImpactLevel] = useState('Critical')
@@ -55,6 +59,22 @@ export default function AdminDashboardPage() {
   const [defensiveControls, setDefensiveControls] = useState<string[]>([''])
 
   const [submitting, setSubmitting] = useState(false)
+
+  // Custom Network Handler
+  const addCustomChain = () => {
+    const trimmed = customChainInput.trim()
+    if (trimmed) {
+      const existingChain = chains.find(c => c.name.toLowerCase() === trimmed.toLowerCase())
+      if (!existingChain) {
+        const newChain = { name: trimmed, logo: '' }
+        setChains([...chains, newChain])
+        setSelectedChain(trimmed)
+      } else {
+        setSelectedChain(existingChain.name)
+      }
+      setCustomChainInput('')
+    }
+  }
 
   // Execute standard formatting commands on visual editor
   const formatText = (command: string, value: string | undefined = undefined) => {
@@ -155,7 +175,7 @@ export default function AdminDashboardPage() {
     e.preventDefault()
     setSubmitting(true)
 
-    const finalChain = selectedChain === 'Custom' ? customChain : selectedChain
+    const finalChain = selectedChain
     const vectorString = selectedVectors.join(', ')
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
 
@@ -262,10 +282,11 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-amber-500/80 mb-2">BLOCKCHAIN NETWORK</label>
+              {/* Blockchain Network Selector with Custom Option */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-amber-500/80">BLOCKCHAIN NETWORK</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {CHAIN_PRESETS.map((chain) => (
+                  {chains.map((chain) => (
                     <button
                       type="button"
                       key={chain.name}
@@ -276,10 +297,34 @@ export default function AdminDashboardPage() {
                           : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
                       }`}
                     >
-                      <img src={chain.logo} alt={chain.name} className="w-4 h-4 rounded-full object-contain" />
-                      <span>{chain.name}</span>
+                      {chain.logo ? (
+                        <img src={chain.logo} alt={chain.name} className="w-4 h-4 rounded-full object-contain" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-[9px] font-bold shrink-0">
+                          {chain.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="truncate">{chain.name}</span>
                     </button>
                   ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Add custom network..." 
+                    value={customChainInput}
+                    onChange={e => setCustomChainInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomChain(); }}}
+                    className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={addCustomChain}
+                    className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-amber-500/30 text-xs font-bold h-9 px-4 shrink-0"
+                  >
+                    + Add Network
+                  </Button>
                 </div>
               </div>
 
