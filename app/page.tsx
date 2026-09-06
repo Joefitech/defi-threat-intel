@@ -22,7 +22,6 @@ export default function HomePage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedChain, setSelectedChain] = useState<string>('All')
 
   useEffect(() => {
     fetchIncidents()
@@ -41,7 +40,7 @@ export default function HomePage() {
     setLoading(false)
   }
 
-  // Calculate Metrics
+  // Calculate Overall Metrics
   const totalLoss = useMemo(() => {
     return incidents.reduce((sum, item) => sum + (Number(item.loss_usd) || 0), 0)
   }, [incidents])
@@ -60,25 +59,21 @@ export default function HomePage() {
     const weeklyLoss = recent.reduce((sum, item) => sum + (Number(item.loss_usd) || 0), 0)
     return {
       count: recent.length,
-      loss: weeklyLoss,
-      items: recent
+      loss: weeklyLoss
     }
   }, [incidents])
 
   // Filtered List for Deep-Dive Grid
   const filteredIncidents = useMemo(() => {
     return incidents.filter(item => {
-      const matchesSearch = 
+      return (
         item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.protocol_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.attack_vector?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.chain?.toLowerCase().includes(searchQuery.toLowerCase())
-
-      const matchesChain = selectedChain === 'All' || item.chain?.toLowerCase().includes(selectedChain.toLowerCase())
-
-      return matchesSearch && matchesChain
+      )
     })
-  }, [incidents, searchQuery, selectedChain])
+  }, [incidents, searchQuery])
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -158,7 +153,7 @@ export default function HomePage() {
             <div className="text-amber-500 text-lg">⚡</div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">Daily Exploit Telemetry</h3>
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Instant logging of confirmed hacks, loss estimations, affected chains, and attacker address tracking within hours of occurrence.
+              Instant logging of confirmed hacks and loss estimations within 24 hours of occurrence.
             </p>
           </div>
           <div className="p-6 bg-neutral-950/60 border border-neutral-900 rounded-xl space-y-2">
@@ -185,7 +180,7 @@ export default function HomePage() {
                 <span>📋</span> Daily Incident Ledger & Weekly Aggregates
               </h2>
               <p className="text-xs text-neutral-400 mt-1">
-                Real-time tabular feed of logged compromises and weekly loss totals.
+                Fast 24-hour telemetry feed of confirmed incidents. Technical analysis reports follow post-verification.
               </p>
             </div>
 
@@ -210,8 +205,6 @@ export default function HomePage() {
                 <tr>
                   <th className="py-3 px-4">Date</th>
                   <th className="py-3 px-4">Protocol</th>
-                  <th className="py-3 px-4">Chain</th>
-                  <th className="py-3 px-4">Attack Vector</th>
                   <th className="py-3 px-4 text-right">Confirmed Loss</th>
                   <th className="py-3 px-4 text-center">Action</th>
                 </tr>
@@ -219,18 +212,18 @@ export default function HomePage() {
               <tbody className="divide-y divide-neutral-900 text-neutral-300">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-neutral-500 font-mono">
+                    <td colSpan={4} className="py-8 text-center text-neutral-500 font-mono">
                       Loading incident ledger...
                     </td>
                   </tr>
                 ) : incidents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-neutral-500">
+                    <td colSpan={4} className="py-8 text-center text-neutral-500">
                       No security incidents logged yet.
                     </td>
                   </tr>
                 ) : (
-                  incidents.slice(0, 10).map((item) => (
+                  incidents.map((item) => (
                     <tr key={item.id} className="hover:bg-neutral-900/40 transition-colors">
                       <td className="py-3.5 px-4 font-mono text-neutral-400">
                         {item.date_of_hack || 'Recent'}
@@ -240,14 +233,6 @@ export default function HomePage() {
                           <img src={item.protocol_logo_url} alt="" className="w-4 h-4 rounded-full object-cover" />
                         )}
                         <span>{item.protocol_name || item.title}</span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 rounded text-[11px] font-mono text-neutral-300">
-                          {item.chain}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-neutral-400">
-                        {item.attack_vector || 'Under Investigation'}
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-amber-400 text-right">
                         {formatCurrency(Number(item.loss_usd) || 0)}
@@ -280,11 +265,10 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Controls */}
             <div className="flex items-center gap-3">
               <input
                 type="text"
-                placeholder="Search protocol, vector, or chain..."
+                placeholder="Search protocol or report..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 px-3 bg-neutral-950 border border-neutral-800 rounded-lg text-xs text-white placeholder:text-neutral-600 focus:border-amber-500 outline-none w-64"
@@ -305,7 +289,7 @@ export default function HomePage() {
                       {incident.protocol_name || 'Protocol Alert'}
                     </span>
                     <span className="px-2.5 py-1 bg-neutral-900 text-neutral-400 border border-neutral-800 text-[10px] font-mono rounded uppercase">
-                      {incident.chain}
+                      {incident.chain || 'Cross-Chain'}
                     </span>
                   </div>
 
@@ -316,7 +300,7 @@ export default function HomePage() {
                   <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-neutral-900">
                     <div>
                       <span className="text-neutral-500 block text-[10px] uppercase font-bold">Attack Vector</span>
-                      <span className="text-neutral-300 font-medium">{incident.attack_vector || 'N/A'}</span>
+                      <span className="text-neutral-300 font-medium">{incident.attack_vector || 'Pending Full Report'}</span>
                     </div>
                     <div className="text-right">
                       <span className="text-neutral-500 block text-[10px] uppercase font-bold">Confirmed Loss</span>
