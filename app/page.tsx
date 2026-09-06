@@ -18,8 +18,19 @@ interface Incident {
   created_at: string
 }
 
+interface DailyIncident {
+  id: string | number
+  created_at?: string
+  date_of_hack: string
+  protocol_name: string
+  protocol_logo_url?: string
+  loss_usd: number
+  sources?: string
+}
+
 export default function HomePage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [dailyIncidents, setDailyIncidents] = useState<DailyIncident[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -29,28 +40,37 @@ export default function HomePage() {
 
   async function fetchIncidents() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('incidents')
-      .select('*')
-      .order('date_of_hack', { ascending: false })
 
-    if (!error && data) {
-      setIncidents(data)
+    // Fetch from both tables concurrently
+    const [detailedRes, dailyRes] = await Promise.all([
+      supabase.from('incidents').select('*').order('date_of_hack', { ascending: false }),
+      supabase.from('daily_incidents').select('*').order('date_of_hack', { ascending: false })
+    ])
+
+    if (!detailedRes.error && detailedRes.data) {
+      setIncidents(detailedRes.data)
     }
+
+    if (!dailyRes.error && dailyRes.data) {
+      setDailyIncidents(dailyRes.data)
+    }
+
     setLoading(false)
   }
 
-  // Calculate Overall Metrics
+  // Calculate Overall Losses across both feeds
   const totalLoss = useMemo(() => {
-    return incidents.reduce((sum, item) => sum + (Number(item.loss_usd) || 0), 0)
-  }, [incidents])
+    const detailedSum = incidents.reduce((sum, item) => sum + (Number(item.loss_usd) || 0), 0)
+    const dailySum = dailyIncidents.reduce((sum, item) => sum + (Number(item.loss_usd) || 0), 0)
+    return detailedSum + dailySum
+  }, [incidents, dailyIncidents])
 
-  // Calculate 7-Day Weekly Metrics
+  // Calculate 7-Day Weekly Metrics specifically for Daily Ledger Feed
   const weeklyMetrics = useMemo(() => {
     const now = new Date()
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-    const recent = incidents.filter(item => {
+    const recent = dailyIncidents.filter(item => {
       const rawDate = item.date_of_hack || item.created_at
       if (!rawDate) return false
       const incidentDate = new Date(rawDate)
@@ -62,7 +82,7 @@ export default function HomePage() {
       count: recent.length,
       loss: weeklyLoss
     }
-  }, [incidents])
+  }, [dailyIncidents])
 
   // Filtered List for Deep-Dive Grid
   const filteredIncidents = useMemo(() => {
@@ -220,34 +240,44 @@ export default function HomePage() {
                       Loading incident telemetry...
                     </td>
                   </tr>
-                ) : incidents.length === 0 ? (
+                ) : dailyIncidents.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-10 text-center text-neutral-500 font-mono text-xs">
                       No security incidents logged yet. Submit a report via the admin dashboard to populate this feed.
                     </td>
                   </tr>
                 ) : (
-                  incidents.map((item) => (
+                  dailyIncidents.map((item) => (
                     <tr key={item.id} className="hover:bg-neutral-900/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono text-neutral-400">
+                      <td className="py-3.5 px-4 font-mono text-neutral-400 whitespace-nowrap">
                         {item.date_of_hack || 'Recent'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
-                        {item.protocol_logo_url && (
+                        {item.protocol_logo_url ? (
                           <img src={item.protocol_logo_url} alt="" className="w-4 h-4 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 text-[10px] flex items-center justify-center border border-amber-500/30 font-sans">
+                            {item.protocol_name?.charAt(0).toUpperCase()}
+                          </div>
                         )}
-                        <span>{item.protocol_name || item.title}</span>
+                        <span>{item.protocol_name}</span>
                       </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-amber-400 text-right">
+                      <td className="py-3.5 px-4 font-mono font-bold text-amber-400 text-right whitespace-nowrap">
                         {formatCurrency(Number(item.loss_usd) || 0)}
                       </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <Link 
-                          href={`/incidents/${item.slug}`}
-                          className="inline-block px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[11px] font-bold transition-all"
-                        >
-                          View Report
-                        </Link>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        {item.sources ? (
+                          <a 
+                            href={item.sources}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[11px] font-bold transition-all"
+                          >
+                            View Source ↗
+                          </a>
+                        ) : (
+                          <span className="text-neutral-600 font-mono text-[11px]">Logged</span>
+                        )}
                       </td>
                     </tr>
                   ))

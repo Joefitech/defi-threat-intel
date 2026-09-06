@@ -164,68 +164,96 @@ export default function AdminDashboardPage() {
 
   // Submission
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
+  e.preventDefault()
+  setSubmitting(true)
 
-    const isDailyOnly = reportType === 'daily'
-    const generatedTitle = title || `${protocolName} Security Incident`
-    const slug = generatedTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+  // 1. Structure the daily payload matching your new daily_incidents table
+  const dailyPayload = {
+    date_of_hack: dateOfHack || null,
+    protocol_name: protocolName,
+    protocol_logo_url: protocolLogoUrl,
+    loss_usd: parseFloat(lossUsd) || 0,
+    sources, // Serves as the action / reference URL
+  }
 
-    let payload: Record<string, any> = {}
-
-    if (isDailyOnly) {
-      // Lightweight payload strictly for Daily Incident Ledger
-      payload = {
-        title: generatedTitle,
-        slug: `${slug}-${Date.now().toString().slice(-4)}`,
-        protocol_name: protocolName,
-        protocol_logo_url: protocolLogoUrl,
-        loss_usd: parseFloat(lossUsd) || 0,
-        date_of_hack: dateOfHack || null,
-        sources, // Serves as Action / Reference Link
-        status: 'published',
-        report_type: 'daily',
-        is_daily: true,
-        is_detailed: false
-      }
-    } else {
-      // Full detailed technical post-mortem payload
-      const vectorString = selectedVectors.join(', ')
-      const cleanedAttackChain = attackChain.filter(step => step.trim().length > 0)
-      const cleanedDefensiveControls = defensiveControls.filter(ctrl => ctrl.trim().length > 0)
-
-      payload = {
-        title: generatedTitle,
-        slug: `${slug}-${Date.now().toString().slice(-4)}`,
-        protocol_name: protocolName,
-        protocol_logo_url: protocolLogoUrl,
-        chain: selectedChain,
-        loss_usd: parseFloat(lossUsd) || 0,
-        attack_vector: vectorString,
-        date_of_hack: dateOfHack || null,
-        impact_level: impactLevel,
-        downstream_protocols: downstreamProtocols,
-        sources,
-        attack_chain: cleanedAttackChain,
-        defensive_controls: cleanedDefensiveControls,
-        content: editorRef.current?.innerHTML || content,
-        status: 'published',
-        report_type: reportType,
-        is_daily: reportType === 'both',
-        is_detailed: true
-      }
-    }
-
-    const { error } = await supabase.from('incidents').insert([payload])
-
+  // 2. Route based on selected reportType
+  if (reportType === 'daily') {
+    // Insert ONLY into daily_incidents table
+    const { error } = await supabase.from('daily_incidents').insert([dailyPayload])
     if (error) {
       alert(`Submission error: ${error.message}`)
     } else {
-      alert(isDailyOnly ? 'Daily Incident Logged Successfully!' : 'Detailed Report Published Successfully!')
+      alert('Daily Incident Logged Successfully!')
       router.push('/')
     }
-    setSubmitting(false)
+  } else if (reportType === 'detailed') {
+    // Insert ONLY into full incidents table
+    const generatedTitle = title || `${protocolName} Security Incident`
+    const slug = `${generatedTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')}-${Date.now().toString().slice(-4)}`
+    
+    const detailedPayload = {
+      title: generatedTitle,
+      slug,
+      protocol_name: protocolName,
+      protocol_logo_url: protocolLogoUrl,
+      chain: selectedChain,
+      loss_usd: parseFloat(lossUsd) || 0,
+      attack_vector: selectedVectors.join(', '),
+      date_of_hack: dateOfHack || null,
+      impact_level: impactLevel,
+      downstream_protocols: downstreamProtocols,
+      sources,
+      attack_chain: attackChain.filter(step => step.trim().length > 0),
+      defensive_controls: defensiveControls.filter(ctrl => ctrl.trim().length > 0),
+      content: editorRef.current?.innerHTML || content,
+      status: 'published'
+    }
+
+    const { error } = await supabase.from('incidents').insert([detailedPayload])
+    if (error) {
+      alert(`Submission error: ${error.message}`)
+    } else {
+      alert('Detailed Report Published Successfully!')
+      router.push('/')
+    }
+  } else {
+    // Both Feeds Option: Write to both tables concurrently
+    const generatedTitle = title || `${protocolName} Security Incident`
+    const slug = `${generatedTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')}-${Date.now().toString().slice(-4)}`
+
+    const detailedPayload = {
+      title: generatedTitle,
+      slug,
+      protocol_name: protocolName,
+      protocol_logo_url: protocolLogoUrl,
+      chain: selectedChain,
+      loss_usd: parseFloat(lossUsd) || 0,
+      attack_vector: selectedVectors.join(', '),
+      date_of_hack: dateOfHack || null,
+      impact_level: impactLevel,
+      downstream_protocols: downstreamProtocols,
+      sources,
+      attack_chain: attackChain.filter(step => step.trim().length > 0),
+      defensive_controls: defensiveControls.filter(ctrl => ctrl.trim().length > 0),
+      content: editorRef.current?.innerHTML || content,
+      status: 'published'
+    }
+
+    const [dailyRes, detailedRes] = await Promise.all([
+      supabase.from('daily_incidents').insert([dailyPayload]),
+      supabase.from('incidents').insert([detailedPayload])
+    ])
+
+    if (dailyRes.error || detailedRes.error) {
+      alert(`Submission error: ${dailyRes.error?.message || detailedRes.error?.message}`)
+    } else {
+      alert('Published to both feeds successfully!')
+      router.push('/')
+    }
   }
+
+  setSubmitting(false)
+}
 
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-10 font-sans">
