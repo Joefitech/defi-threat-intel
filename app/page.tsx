@@ -51,8 +51,9 @@ export default function HomePage() {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
     const recent = incidents.filter(item => {
-      if (!item.date_of_hack) return false
-      const incidentDate = new Date(item.date_of_hack)
+      const rawDate = item.date_of_hack || item.created_at
+      if (!rawDate) return false
+      const incidentDate = new Date(rawDate)
       return incidentDate >= sevenDaysAgo
     })
 
@@ -65,12 +66,15 @@ export default function HomePage() {
 
   // Filtered List for Deep-Dive Grid
   const filteredIncidents = useMemo(() => {
+    if (!searchQuery.trim()) return incidents
+
+    const query = searchQuery.toLowerCase()
     return incidents.filter(item => {
       return (
-        item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.protocol_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.attack_vector?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.chain?.toLowerCase().includes(searchQuery.toLowerCase())
+        item.title?.toLowerCase().includes(query) ||
+        item.protocol_name?.toLowerCase().includes(query) ||
+        item.attack_vector?.toLowerCase().includes(query) ||
+        item.chain?.toLowerCase().includes(query)
       )
     })
   }, [incidents, searchQuery])
@@ -119,7 +123,7 @@ export default function HomePage() {
               Real-time Decentralized Finance Threat Intelligence & Post-Mortem Hub
             </h1>
             <p className="text-neutral-400 text-base leading-relaxed">
-              We monitor, deconstruct, and analyze active exploits, Smart Contract vulnerabilities, and cross-chain bridge compromises across web3 ecosystems. Our objective is to standardise exploit root-cause analysis, provide immediate actionable telemetry to security teams, and publish actionable defensive controls.
+              We monitor, deconstruct, and analyze active exploits, Smart Contract vulnerabilities, and cross-chain bridge compromises across web3 ecosystems. Our objective is to standardize exploit root-cause analysis, provide immediate actionable telemetry to security teams, and publish actionable defensive controls.
             </p>
           </div>
 
@@ -130,7 +134,7 @@ export default function HomePage() {
               <p className="text-2xl font-black text-amber-400 font-mono">{formatCurrency(totalLoss)}</p>
             </div>
             <div className="p-5 bg-neutral-950 border border-neutral-900 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Published Technical Breakdown</span>
+              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Published Technical Breakdowns</span>
               <p className="text-2xl font-black text-white font-mono">{incidents.length}</p>
             </div>
             <div className="p-5 bg-neutral-950 border border-neutral-900 rounded-xl space-y-1">
@@ -213,13 +217,13 @@ export default function HomePage() {
                 {loading ? (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-neutral-500 font-mono">
-                      Loading incident ledger...
+                      Loading incident telemetry...
                     </td>
                   </tr>
                 ) : incidents.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-neutral-500">
-                      No security incidents logged yet.
+                    <td colSpan={4} className="py-10 text-center text-neutral-500 font-mono text-xs">
+                      No security incidents logged yet. Submit a report via the admin dashboard to populate this feed.
                     </td>
                   </tr>
                 ) : (
@@ -268,7 +272,7 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <input
                 type="text"
-                placeholder="Search protocol or report..."
+                placeholder="Search protocol, vector, or chain..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 px-3 bg-neutral-950 border border-neutral-800 rounded-lg text-xs text-white placeholder:text-neutral-600 focus:border-amber-500 outline-none w-64"
@@ -277,49 +281,64 @@ export default function HomePage() {
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredIncidents.map((incident) => (
-              <div 
-                key={incident.id} 
-                className="bg-neutral-950 border border-neutral-900 hover:border-amber-500/40 rounded-xl p-6 transition-all space-y-4 flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold rounded uppercase">
-                      {incident.protocol_name || 'Protocol Alert'}
-                    </span>
-                    <span className="px-2.5 py-1 bg-neutral-900 text-neutral-400 border border-neutral-800 text-[10px] font-mono rounded uppercase">
-                      {incident.chain || 'Cross-Chain'}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-white leading-snug">
-                    {incident.title}
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-neutral-900">
-                    <div>
-                      <span className="text-neutral-500 block text-[10px] uppercase font-bold">Attack Vector</span>
-                      <span className="text-neutral-300 font-medium">{incident.attack_vector || 'Pending Full Report'}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-neutral-500 block text-[10px] uppercase font-bold">Confirmed Loss</span>
-                      <span className="text-amber-400 font-mono font-bold text-sm">
-                        {formatCurrency(Number(incident.loss_usd) || 0)}
+          {loading ? (
+            <div className="p-12 text-center text-neutral-500 font-mono text-xs bg-neutral-950 border border-neutral-900 rounded-xl">
+              Loading report archive...
+            </div>
+          ) : filteredIncidents.length === 0 ? (
+            <div className="p-12 text-center text-neutral-500 bg-neutral-950 border border-neutral-900 rounded-xl space-y-2">
+              <p className="text-sm font-semibold text-neutral-400">
+                {searchQuery ? `No reports match "${searchQuery}"` : 'No technical reports published yet.'}
+              </p>
+              <p className="text-xs text-neutral-600 font-mono">
+                {searchQuery ? 'Try searching by a different key phrase or protocol name.' : 'Check back shortly for new post-mortem analyses.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredIncidents.map((incident) => (
+                <div 
+                  key={incident.id} 
+                  className="bg-neutral-950 border border-neutral-900 hover:border-amber-500/40 rounded-xl p-6 transition-all space-y-4 flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold rounded uppercase">
+                        {incident.protocol_name || 'Protocol Alert'}
+                      </span>
+                      <span className="px-2.5 py-1 bg-neutral-900 text-neutral-400 border border-neutral-800 text-[10px] font-mono rounded uppercase">
+                        {incident.chain || 'Cross-Chain'}
                       </span>
                     </div>
-                  </div>
-                </div>
 
-                <Link
-                  href={`/incidents/${incident.slug}`}
-                  className="w-full text-center py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 text-xs font-bold rounded-lg transition-all block tracking-wide"
-                >
-                  VIEW FULL ANALYSIS & DIAGRAM →
-                </Link>
-              </div>
-            ))}
-          </div>
+                    <h3 className="text-lg font-bold text-white leading-snug">
+                      {incident.title}
+                    </h3>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-neutral-900">
+                      <div>
+                        <span className="text-neutral-500 block text-[10px] uppercase font-bold">Attack Vector</span>
+                        <span className="text-neutral-300 font-medium">{incident.attack_vector || 'Pending Full Report'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-neutral-500 block text-[10px] uppercase font-bold">Confirmed Loss</span>
+                        <span className="text-amber-400 font-mono font-bold text-sm">
+                          {formatCurrency(Number(incident.loss_usd) || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href={`/incidents/${incident.slug}`}
+                    className="w-full text-center py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-amber-400 text-xs font-bold rounded-lg transition-all block tracking-wide"
+                  >
+                    VIEW FULL ANALYSIS & DIAGRAM →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
       </main>
