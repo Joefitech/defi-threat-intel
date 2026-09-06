@@ -32,25 +32,23 @@ export default function AdminDashboardPage() {
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Report Type / Target State
-  const [reportType, setReportType] = useState<'both' | 'daily' | 'detailed'>('both')
+  // Report Type / Target State ('daily' | 'detailed' | 'both')
+  const [reportType, setReportType] = useState<'both' | 'daily' | 'detailed'>('daily')
 
-  // Form State
-  const [title, setTitle] = useState('')
+  // Shared Form Fields
   const [protocolName, setProtocolName] = useState('')
   const [protocolLogoUrl, setProtocolLogoUrl] = useState('')
-  const [uploadingImage, setUploadingImage] = useState(false)
-  
-  // Blockchain Network State
+  const [lossUsd, setLossUsd] = useState('')
+  const [dateOfHack, setDateOfHack] = useState('')
+  const [sources, setSources] = useState('') // Used as Action / Reference link in Daily mode
+
+  // Detailed Report Specific Fields
+  const [title, setTitle] = useState('')
   const [chains, setChains] = useState(CHAIN_PRESETS)
   const [selectedChain, setSelectedChain] = useState('Ethereum')
   const [customChainInput, setCustomChainInput] = useState('')
-
-  const [lossUsd, setLossUsd] = useState('')
-  const [dateOfHack, setDateOfHack] = useState('')
   const [impactLevel, setImpactLevel] = useState('Critical')
   const [downstreamProtocols, setDownstreamProtocols] = useState('')
-  const [sources, setSources] = useState('')
   const [content, setContent] = useState('')
 
   // Attack Vectors
@@ -61,16 +59,16 @@ export default function AdminDashboardPage() {
   const [attackChain, setAttackChain] = useState<string[]>([''])
   const [defensiveControls, setDefensiveControls] = useState<string[]>([''])
 
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Custom Network Handler
+  // Handlers
   const addCustomChain = () => {
     const trimmed = customChainInput.trim()
     if (trimmed) {
       const existingChain = chains.find(c => c.name.toLowerCase() === trimmed.toLowerCase())
       if (!existingChain) {
-        const newChain = { name: trimmed, logo: '' }
-        setChains([...chains, newChain])
+        setChains([...chains, { name: trimmed, logo: '' }])
         setSelectedChain(trimmed)
       } else {
         setSelectedChain(existingChain.name)
@@ -79,7 +77,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Execute standard formatting commands on visual editor
   const formatText = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value)
     if (editorRef.current) {
@@ -87,7 +84,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Convert File to Base64 Fallback
   const readAsBase64 = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader()
@@ -96,7 +92,6 @@ export default function AdminDashboardPage() {
     })
   }
 
-  // Handle direct file upload from Rich Text Toolbar into Body
   const handleInlineImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -109,14 +104,10 @@ export default function AdminDashboardPage() {
       const fileName = `${Date.now()}.${fileExt}`
       const filePath = `diagrams/${fileName}`
 
-      const { error } = await supabase.storage
-        .from('incident-media')
-        .upload(filePath, file)
+      const { error } = await supabase.storage.from('incident-media').upload(filePath, file)
 
       if (!error) {
-        const { data: publicUrlData } = supabase.storage
-          .from('incident-media')
-          .getPublicUrl(filePath)
+        const { data: publicUrlData } = supabase.storage.from('incident-media').getPublicUrl(filePath)
         imageUrl = publicUrlData.publicUrl
       } else {
         imageUrl = await readAsBase64(file)
@@ -135,7 +126,6 @@ export default function AdminDashboardPage() {
     e.target.value = ''
   }
 
-  // Tag Handlers
   const toggleVector = (vector: string) => {
     if (selectedVectors.includes(vector)) {
       setSelectedVectors(selectedVectors.filter(v => v !== vector))
@@ -152,7 +142,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  // Dynamic Step Handlers
   const handleAttackStepChange = (index: number, value: string) => {
     const updated = [...attackChain]
     updated[index] = value
@@ -173,37 +162,58 @@ export default function AdminDashboardPage() {
     if (defensiveControls.length > 1) setDefensiveControls(defensiveControls.filter((_, i) => i !== index))
   }
 
-  // Form Submission
+  // Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
 
-    const finalChain = selectedChain
-    const vectorString = selectedVectors.join(', ')
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+    const isDailyOnly = reportType === 'daily'
+    const generatedTitle = title || `${protocolName} Security Incident`
+    const slug = generatedTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
 
-    const cleanedAttackChain = attackChain.filter(step => step.trim().length > 0)
-    const cleanedDefensiveControls = defensiveControls.filter(ctrl => ctrl.trim().length > 0)
+    let payload: Record<string, any> = {}
 
-    const payload: Record<string, any> = {
-      title,
-      slug: `${slug}-${Date.now().toString().slice(-4)}`,
-      protocol_name: protocolName,
-      protocol_logo_url: protocolLogoUrl,
-      chain: finalChain,
-      loss_usd: parseFloat(lossUsd) || 0,
-      attack_vector: vectorString,
-      date_of_hack: dateOfHack ? dateOfHack : null,
-      impact_level: impactLevel,
-      downstream_protocols: downstreamProtocols,
-      sources,
-      attack_chain: cleanedAttackChain,
-      defensive_controls: cleanedDefensiveControls,
-      content: editorRef.current?.innerHTML || content,
-      status: 'published',
-      report_type: reportType,
-      is_daily: reportType === 'daily' || reportType === 'both',
-      is_detailed: reportType === 'detailed' || reportType === 'both'
+    if (isDailyOnly) {
+      // Lightweight payload strictly for Daily Incident Ledger
+      payload = {
+        title: generatedTitle,
+        slug: `${slug}-${Date.now().toString().slice(-4)}`,
+        protocol_name: protocolName,
+        protocol_logo_url: protocolLogoUrl,
+        loss_usd: parseFloat(lossUsd) || 0,
+        date_of_hack: dateOfHack || null,
+        sources, // Serves as Action / Reference Link
+        status: 'published',
+        report_type: 'daily',
+        is_daily: true,
+        is_detailed: false
+      }
+    } else {
+      // Full detailed technical post-mortem payload
+      const vectorString = selectedVectors.join(', ')
+      const cleanedAttackChain = attackChain.filter(step => step.trim().length > 0)
+      const cleanedDefensiveControls = defensiveControls.filter(ctrl => ctrl.trim().length > 0)
+
+      payload = {
+        title: generatedTitle,
+        slug: `${slug}-${Date.now().toString().slice(-4)}`,
+        protocol_name: protocolName,
+        protocol_logo_url: protocolLogoUrl,
+        chain: selectedChain,
+        loss_usd: parseFloat(lossUsd) || 0,
+        attack_vector: vectorString,
+        date_of_hack: dateOfHack || null,
+        impact_level: impactLevel,
+        downstream_protocols: downstreamProtocols,
+        sources,
+        attack_chain: cleanedAttackChain,
+        defensive_controls: cleanedDefensiveControls,
+        content: editorRef.current?.innerHTML || content,
+        status: 'published',
+        report_type: reportType,
+        is_daily: reportType === 'both',
+        is_detailed: true
+      }
     }
 
     const { error } = await supabase.from('incidents').insert([payload])
@@ -211,7 +221,7 @@ export default function AdminDashboardPage() {
     if (error) {
       alert(`Submission error: ${error.message}`)
     } else {
-      alert('Threat Breakdown Published Successfully!')
+      alert(isDailyOnly ? 'Daily Incident Logged Successfully!' : 'Detailed Report Published Successfully!')
       router.push('/')
     }
     setSubmitting(false)
@@ -227,34 +237,22 @@ export default function AdminDashboardPage() {
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
               Publish Incident Breakdown
             </h1>
-            <p className="text-xs text-neutral-400 mt-1">Defi Threat Intelligence Command Console</p>
+            <p className="text-xs text-neutral-400 mt-1">DeFi Threat Intelligence Command Console</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* Target Selection: Daily Ledger vs Detailed Report vs Both */}
+          {/* Target Feed Switcher */}
           <Card className="bg-neutral-950 border-amber-500/30 text-white">
             <CardHeader className="pb-3 border-b border-neutral-900">
               <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider flex justify-between items-center">
                 <span>Publication Target Feed</span>
-                <span className="text-[10px] text-neutral-400 font-normal">Controls where this incident displays on the main page</span>
+                <span className="text-[10px] text-neutral-400 font-normal">Controls form fields and output destination</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setReportType('both')}
-                  className={`p-3 rounded-lg border text-left transition-all ${
-                    reportType === 'both'
-                      ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
-                  }`}
-                >
-                  <div className="text-xs font-bold">Both Feeds (Recommended)</div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Daily Ledger Table + Full Technical Report</div>
-                </button>
                 <button
                   type="button"
                   onClick={() => setReportType('daily')}
@@ -265,8 +263,9 @@ export default function AdminDashboardPage() {
                   }`}
                 >
                   <div className="text-xs font-bold">Daily Incident Ledger Only</div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Fast 24-hr telemetry feed entry</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Fast 24-hr telemetry entry (Date, Protocol, Loss, Action)</div>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setReportType('detailed')}
@@ -279,441 +278,505 @@ export default function AdminDashboardPage() {
                   <div className="text-xs font-bold">Detailed Technical Report Only</div>
                   <div className="text-[10px] text-neutral-400 mt-0.5">Full post-mortem & root cause analysis</div>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReportType('both')}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    reportType === 'both'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
+                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">Both Feeds</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Populate Ledger + Create Detailed Report</div>
+                </button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Section 1: Core Protocol & Network Metadata */}
-          <Card className="bg-neutral-950 border-amber-500/20 text-white">
-            <CardHeader className="pb-3 border-b border-neutral-900">
-              <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
-                1. Protocol & Network Metadata
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-amber-500/80 mb-1">REPORT TITLE</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="e.g., Access Control & Bridge Proxy Drain" 
-                    value={title} 
-                    onChange={e => setTitle(e.target.value)}
-                    className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:border-amber-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-amber-500/80 mb-1">PROTOCOL NAME</label>
-                  <div className="flex gap-2 items-center">
+          {/* STREAMLINED DAILY LEDGER FORM */}
+          {reportType === 'daily' ? (
+            <Card className="bg-neutral-950 border-amber-500/30 text-white">
+              <CardHeader className="pb-3 border-b border-neutral-900">
+                <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-2">
+                  <span>📋 Daily Incident Ledger Fields</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">1. DATE OF INCIDENT</label>
                     <input 
-                      type="text" 
-                      required 
-                      placeholder="e.g., Humanity Protocol" 
-                      value={protocolName} 
-                      onChange={e => setProtocolName(e.target.value)}
-                      className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:border-amber-500 outline-none"
+                      type="date" 
+                      required
+                      value={dateOfHack} 
+                      onChange={e => setDateOfHack(e.target.value)}
+                      className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
                     />
-                    {protocolLogoUrl ? (
-                      <img src={protocolLogoUrl} alt="Logo" className="w-8 h-8 rounded-full border border-amber-500/40 object-cover" />
-                    ) : protocolName ? (
-                      <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xs font-bold">
-                        {protocolName.charAt(0).toUpperCase()}
-                      </div>
-                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">2. PROTOCOL NAME</label>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="e.g., Humanity Protocol" 
+                        value={protocolName} 
+                        onChange={e => setProtocolName(e.target.value)}
+                        className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                      />
+                      {protocolLogoUrl ? (
+                        <img src={protocolLogoUrl} alt="Logo" className="w-8 h-8 rounded-full border border-amber-500/40 object-cover shrink-0" />
+                      ) : protocolName ? (
+                        <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xs font-bold shrink-0">
+                          {protocolName.charAt(0).toUpperCase()}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-amber-500/80 mb-1">PROTOCOL LOGO URL (OPTIONAL)</label>
-                <input 
-                  type="url" 
-                  placeholder="https://.../logo.png" 
-                  value={protocolLogoUrl} 
-                  onChange={e => setProtocolLogoUrl(e.target.value)}
-                  className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                />
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">3. CONFIRMED LOSS (USD)</label>
+                    <input 
+                      type="number" 
+                      required 
+                      placeholder="e.g., 32000000" 
+                      value={lossUsd} 
+                      onChange={e => setLossUsd(e.target.value)}
+                      className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                    />
+                  </div>
 
-              {/* Blockchain Network Selector with Custom Option */}
-              <div className="space-y-3">
-                <label className="block text-xs font-bold text-amber-500/80">BLOCKCHAIN NETWORK</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {chains.map((chain) => (
-                    <button
-                      type="button"
-                      key={chain.name}
-                      onClick={() => setSelectedChain(chain.name)}
-                      className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${
-                        selectedChain === chain.name 
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-400' 
-                          : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
-                      }`}
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">4. ACTION / REFERENCE LINK</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://etherscan.io/tx/... or Alert URL" 
+                      value={sources} 
+                      onChange={e => setSources(e.target.value)}
+                      className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-neutral-400 mb-1">PROTOCOL LOGO URL (OPTIONAL)</label>
+                  <input 
+                    type="url" 
+                    placeholder="https://.../logo.png" 
+                    value={protocolLogoUrl} 
+                    onChange={e => setProtocolLogoUrl(e.target.value)}
+                    className="w-full h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                  />
+                </div>
+
+              </CardContent>
+            </Card>
+          ) : (
+            /* EXPANDED DETAILED TECHNICAL REPORT FORM */
+            <>
+              {/* Section 1: Core Protocol & Network Metadata */}
+              <Card className="bg-neutral-950 border-amber-500/20 text-white">
+                <CardHeader className="pb-3 border-b border-neutral-900">
+                  <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    1. Protocol & Network Metadata
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-amber-500/80 mb-1">REPORT TITLE</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="e.g., Access Control & Bridge Proxy Drain" 
+                        value={title} 
+                        onChange={e => setTitle(e.target.value)}
+                        className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:border-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-amber-500/80 mb-1">PROTOCOL NAME</label>
+                      <div className="flex gap-2 items-center">
+                        <input 
+                          type="text" 
+                          required 
+                          placeholder="e.g., Humanity Protocol" 
+                          value={protocolName} 
+                          onChange={e => setProtocolName(e.target.value)}
+                          className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:border-amber-500 outline-none"
+                        />
+                        {protocolLogoUrl ? (
+                          <img src={protocolLogoUrl} alt="Logo" className="w-8 h-8 rounded-full border border-amber-500/40 object-cover" />
+                        ) : protocolName ? (
+                          <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xs font-bold">
+                            {protocolName.charAt(0).toUpperCase()}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">PROTOCOL LOGO URL (OPTIONAL)</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://.../logo.png" 
+                      value={protocolLogoUrl} 
+                      onChange={e => setProtocolLogoUrl(e.target.value)}
+                      className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Blockchain Network Selector */}
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold text-amber-500/80">BLOCKCHAIN NETWORK</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {chains.map((chain) => (
+                        <button
+                          type="button"
+                          key={chain.name}
+                          onClick={() => setSelectedChain(chain.name)}
+                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-bold transition-all ${
+                            selectedChain === chain.name 
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-400' 
+                              : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                          }`}
+                        >
+                          {chain.logo ? (
+                            <img src={chain.logo} alt={chain.name} className="w-4 h-4 rounded-full object-contain" />
+                          ) : (
+                            <div className="w-4 h-4 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-[9px] font-bold shrink-0">
+                              {chain.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="truncate">{chain.name}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Add custom network..." 
+                        value={customChainInput}
+                        onChange={e => setCustomChainInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomChain(); }}}
+                        className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                      />
+                      <Button 
+                        type="button" 
+                        onClick={addCustomChain}
+                        className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-amber-500/30 text-xs font-bold h-9 px-4 shrink-0"
+                      >
+                        + Add Network
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-amber-500/80 mb-1">ESTIMATED LOSS (USD)</label>
+                      <input 
+                        type="number" 
+                        required 
+                        placeholder="32000000" 
+                        value={lossUsd} 
+                        onChange={e => setLossUsd(e.target.value)}
+                        className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:border-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-amber-500/80 mb-1">DATE OF HACK</label>
+                      <input 
+                        type="date" 
+                        value={dateOfHack} 
+                        onChange={e => setDateOfHack(e.target.value)}
+                        className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-amber-500/80 mb-1">IMPACT SEVERITY</label>
+                      <select 
+                        value={impactLevel} 
+                        onChange={e => setImpactLevel(e.target.value)}
+                        className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                      >
+                        <option value="Critical">Critical (Complete Drain / Core Exploited)</option>
+                        <option value="High">High (Significant Loss / Partial Vulnerability)</option>
+                        <option value="Medium">Medium (Limited Vault Impact)</option>
+                        <option value="Low">Low (Informational / Minor Risk)</option>
+                      </select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Section 2: Attack Vector Classification Tags */}
+              <Card className="bg-neutral-950 border-amber-500/20 text-white">
+                <CardHeader className="pb-3 border-b border-neutral-900">
+                  <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    2. Attack Vector Classification Tags
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {selectedVectors.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-3 bg-neutral-900/60 border border-amber-500/30 rounded-lg">
+                      <span className="text-xs text-neutral-400 self-center mr-1">Active Tags:</span>
+                      {selectedVectors.map(vec => (
+                        <span 
+                          key={vec} 
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-bold rounded-full"
+                        >
+                          {vec}
+                          <button 
+                            type="button" 
+                            onClick={() => toggleVector(vec)}
+                            className="hover:text-white transition-colors text-sm font-bold ml-1"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-400 mb-2">Select Standardized Vectors:</label>
+                    <div className="flex flex-wrap gap-2">
+                      {VECTOR_PRESETS.map(preset => {
+                        const isSelected = selectedVectors.includes(preset)
+                        return (
+                          <button
+                            type="button"
+                            key={preset}
+                            onClick={() => toggleVector(preset)}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md border transition-all ${
+                              isSelected
+                                ? 'bg-amber-500 text-black border-amber-400 font-extrabold'
+                                : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-amber-500/50'
+                            }`}
+                          >
+                            {isSelected ? '✓ ' : '+ '}{preset}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <input 
+                      type="text" 
+                      placeholder="Create custom vector tag..." 
+                      value={customVectorInput}
+                      onChange={e => setCustomVectorInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomVector(); }}}
+                      className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                    />
+                    <Button 
+                      type="button" 
+                      onClick={addCustomVector}
+                      className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-amber-500/30 text-xs font-bold h-9 px-4"
                     >
-                      {chain.logo ? (
-                        <img src={chain.logo} alt={chain.name} className="w-4 h-4 rounded-full object-contain" />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-[9px] font-bold shrink-0">
-                          {chain.name.charAt(0).toUpperCase()}
+                      + Add Custom Vector
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Section 3: Dynamic Attack Chain & Defensive Controls */}
+              <Card className="bg-neutral-950 border-amber-500/20 text-white">
+                <CardHeader className="pb-3 border-b border-neutral-900">
+                  <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    3. Isolated Attack Chain & Defensive Controls
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-amber-500/90 uppercase tracking-wider">
+                        ⚡ Attack Execution Flow
+                      </label>
+                      <Button 
+                        type="button" 
+                        onClick={addAttackStep} 
+                        className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold h-7 px-3"
+                      >
+                        ＋ Add Step
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {attackChain.map((step, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <span className="text-xs font-mono font-bold text-amber-500/70 w-14 shrink-0">
+                            Step {idx + 1}:
+                          </span>
+                          <input 
+                            type="text" 
+                            placeholder="e.g., Attacker compromised laptop via phishing attachment" 
+                            value={step}
+                            onChange={e => handleAttackStepChange(idx, e.target.value)}
+                            className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                          />
+                          {attackChain.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => removeAttackStep(idx)}
+                              className="text-neutral-500 hover:text-red-400 px-2 text-sm font-bold"
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
-                      )}
-                      <span className="truncate">{chain.name}</span>
-                    </button>
-                  ))}
-                </div>
+                      ))}
+                    </div>
+                  </div>
 
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Add custom network..." 
-                    value={customChainInput}
-                    onChange={e => setCustomChainInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomChain(); }}}
-                    className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                  />
-                  <Button 
-                    type="button" 
-                    onClick={addCustomChain}
-                    className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-amber-500/30 text-xs font-bold h-9 px-4 shrink-0"
-                  >
-                    + Add Network
-                  </Button>
-                </div>
-              </div>
+                  <div className="space-y-3 pt-4 border-t border-neutral-900">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-amber-500/90 uppercase tracking-wider">
+                        🛡️ Defensive Controls
+                      </label>
+                      <Button 
+                        type="button" 
+                        onClick={addDefensiveControl} 
+                        className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold h-7 px-3"
+                      >
+                        ＋ Add Control
+                      </Button>
+                    </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-amber-500/80 mb-1">ESTIMATED LOSS (USD)</label>
-                  <input 
-                    type="number" 
-                    required 
-                    placeholder="32000000" 
-                    value={lossUsd} 
-                    onChange={e => setLossUsd(e.target.value)}
-                    className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-sm text-white focus:border-amber-500 outline-none"
-                  />
-                </div>
+                    <div className="space-y-2">
+                      {defensiveControls.map((ctrl, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <span className="text-xs font-mono font-bold text-amber-500/70 w-14 shrink-0">
+                            Ctrl {idx + 1}:
+                          </span>
+                          <input 
+                            type="text" 
+                            placeholder="e.g., Mandatory Hardware Security Modules (HSM)" 
+                            value={ctrl}
+                            onChange={e => handleDefensiveControlChange(idx, e.target.value)}
+                            className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                          />
+                          {defensiveControls.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => removeDefensiveControl(idx)}
+                              className="text-neutral-500 hover:text-red-400 px-2 text-sm font-bold"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                <div>
-                  <label className="block text-xs font-bold text-amber-500/80 mb-1">DATE OF HACK</label>
-                  <input 
-                    type="date" 
-                    value={dateOfHack} 
-                    onChange={e => setDateOfHack(e.target.value)}
-                    className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                  />
-                </div>
+              {/* Section 4: Body Analysis */}
+              <Card className="bg-neutral-950 border-amber-500/20 text-white">
+                <CardHeader className="pb-3 border-b border-neutral-900">
+                  <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+                    4. Downstream Impact, References & Analysis Body
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">DOWNSTREAM IMPACTED PROTOCOLS</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., Curve pools, Aave v3 collateral vaults" 
+                      value={downstreamProtocols} 
+                      onChange={e => setDownstreamProtocols(e.target.value)}
+                      className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-amber-500/80 mb-1">IMPACT SEVERITY</label>
-                  <select 
-                    value={impactLevel} 
-                    onChange={e => setImpactLevel(e.target.value)}
-                    className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                  >
-                    <option value="Critical">Critical (Complete Drain / Core Exploited)</option>
-                    <option value="High">High (Significant Loss / Partial Vulnerability)</option>
-                    <option value="Medium">Medium (Limited Vault Impact)</option>
-                    <option value="Low">Low (Informational / Minor Risk)</option>
-                  </select>
-                </div>
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-amber-500/80 mb-1">SOURCES & REFERENCES (ONE PER LINE)</label>
+                    <textarea 
+                      rows={3}
+                      placeholder="https://etherscan.io/tx/0x...&#10;PeckShield Incident Alert" 
+                      value={sources} 
+                      onChange={e => setSources(e.target.value)}
+                      className="w-full p-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none font-mono"
+                    />
+                  </div>
 
-            </CardContent>
-          </Card>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-bold text-amber-500/80">FULL TECHNICAL ANALYSIS BODY</label>
+                    </div>
 
-          {/* Section 2: Attack Vector Classification Tags */}
-          <Card className="bg-neutral-950 border-amber-500/20 text-white">
-            <CardHeader className="pb-3 border-b border-neutral-900">
-              <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
-                2. Attack Vector Classification Tags
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              
-              {selectedVectors.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-3 bg-neutral-900/60 border border-amber-500/30 rounded-lg">
-                  <span className="text-xs text-neutral-400 self-center mr-1">Active Tags:</span>
-                  {selectedVectors.map(vec => (
-                    <span 
-                      key={vec} 
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-bold rounded-full"
-                    >
-                      {vec}
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      accept="image/*" 
+                      onChange={handleInlineImageUpload} 
+                      className="hidden" 
+                    />
+
+                    <div className="flex flex-wrap items-center gap-1.5 p-2 bg-neutral-900 border border-neutral-800 rounded-t-lg select-none">
                       <button 
                         type="button" 
-                        onClick={() => toggleVector(vec)}
-                        className="hover:text-white transition-colors text-sm font-bold ml-1"
+                        onClick={() => formatText('bold')}
+                        className="px-2.5 py-1 text-xs font-extrabold bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-amber-400"
                       >
-                        ×
+                        B
                       </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-neutral-400 mb-2">Select Standardized Vectors:</label>
-                <div className="flex flex-wrap gap-2">
-                  {VECTOR_PRESETS.map(preset => {
-                    const isSelected = selectedVectors.includes(preset)
-                    return (
-                      <button
-                        type="button"
-                        key={preset}
-                        onClick={() => toggleVector(preset)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md border transition-all ${
-                          isSelected
-                            ? 'bg-amber-500 text-black border-amber-400 font-extrabold'
-                            : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-amber-500/50'
-                        }`}
+                      <button 
+                        type="button" 
+                        onClick={() => formatText('italic')}
+                        className="px-2.5 py-1 text-xs italic font-serif bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-amber-400"
                       >
-                        {isSelected ? '✓ ' : '+ '}{preset}
+                        I
                       </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <input 
-                  type="text" 
-                  placeholder="Create custom vector tag..." 
-                  value={customVectorInput}
-                  onChange={e => setCustomVectorInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomVector(); }}}
-                  className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                />
-                <Button 
-                  type="button" 
-                  onClick={addCustomVector}
-                  className="bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-amber-500/30 text-xs font-bold h-9 px-4"
-                >
-                  + Add Custom Vector
-                </Button>
-              </div>
-
-            </CardContent>
-          </Card>
-
-          {/* Section 3: Dynamic Attack Chain & Defensive Controls */}
-          <Card className="bg-neutral-950 border-amber-500/20 text-white">
-            <CardHeader className="pb-3 border-b border-neutral-900">
-              <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
-                3. Isolated Attack Chain & Defensive Controls
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-6">
-              
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-amber-500/90 uppercase tracking-wider">
-                    ⚡ Attack Execution Flow (Sequence)
-                  </label>
-                  <Button 
-                    type="button" 
-                    onClick={addAttackStep} 
-                    className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold h-7 px-3"
-                  >
-                    ＋ Add Attack Step
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  {attackChain.map((step, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <span className="text-xs font-mono font-bold text-amber-500/70 w-14 shrink-0">
-                        Step {idx + 1}:
-                      </span>
-                      <input 
-                        type="text" 
-                        placeholder="e.g., Attacker compromised laptop via phishing attachment to gain SSH keys" 
-                        value={step}
-                        onChange={e => handleAttackStepChange(idx, e.target.value)}
-                        className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                      />
-                      {attackChain.length > 1 && (
-                        <button 
-                          type="button" 
-                          onClick={() => removeAttackStep(idx)}
-                          className="text-neutral-500 hover:text-red-400 px-2 text-sm font-bold"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      <button 
+                        type="button" 
+                        onClick={() => formatText('formatBlock', '<h3>')}
+                        className="px-2 py-1 text-xs font-bold bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300"
+                      >
+                        H3
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => formatText('insertUnorderedList')}
+                        className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300"
+                      >
+                        List
+                      </button>
+                      <button 
+                        type="button" 
+                        disabled={uploadingImage}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 rounded font-bold"
+                      >
+                        📷 {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                      </button>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="space-y-3 pt-4 border-t border-neutral-900">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-amber-500/90 uppercase tracking-wider">
-                    🛡️ Defensive Controls & Mitigation Recommendations
-                  </label>
-                  <Button 
-                    type="button" 
-                    onClick={addDefensiveControl} 
-                    className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold h-7 px-3"
-                  >
-                    ＋ Add Defensive Control
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  {defensiveControls.map((ctrl, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <span className="text-xs font-mono font-bold text-amber-500/70 w-14 shrink-0">
-                        Ctrl {idx + 1}:
-                      </span>
-                      <input 
-                        type="text" 
-                        placeholder="e.g., Mandatory Hardware Security Modules (HSM) for administrative multisig signers" 
-                        value={ctrl}
-                        onChange={e => handleDefensiveControlChange(idx, e.target.value)}
-                        className="flex-1 h-9 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                      />
-                      {defensiveControls.length > 1 && (
-                        <button 
-                          type="button" 
-                          onClick={() => removeDefensiveControl(idx)}
-                          className="text-neutral-500 hover:text-red-400 px-2 text-sm font-bold"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </CardContent>
-          </Card>
-
-          {/* Section 4: Downstream Impact & Visual WYSIWYG Editor Body */}
-          <Card className="bg-neutral-950 border-amber-500/20 text-white">
-            <CardHeader className="pb-3 border-b border-neutral-900">
-              <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider">
-                4. Downstream Impact, References & Body Analysis
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              
-              <div>
-                <label className="block text-xs font-bold text-amber-500/80 mb-1">DOWNSTREAM IMPACTED PROTOCOLS</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g., Curve pools, Aave v3 collateral vaults" 
-                  value={downstreamProtocols} 
-                  onChange={e => setDownstreamProtocols(e.target.value)}
-                  className="w-full h-10 px-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-amber-500/80 mb-1">AGGREGATED SOURCES & REFERENCES (ONE PER LINE)</label>
-                <textarea 
-                  rows={3}
-                  placeholder="https://etherscan.io/tx/0x...&#10;PeckShield Twitter Incident Alert" 
-                  value={sources} 
-                  onChange={e => setSources(e.target.value)}
-                  className="w-full p-3 bg-neutral-900 border border-neutral-800 rounded text-xs text-white focus:border-amber-500 outline-none font-mono"
-                />
-              </div>
-
-              {/* VISUAL RICH TEXT EDITOR WITH DIRECT INLINE IMAGE UPLOAD */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-bold text-amber-500/80">
-                    FULL TECHNICAL ANALYSIS BODY
-                  </label>
-                  <span className="text-[11px] text-neutral-500">Highlight text to format or upload image inline</span>
-                </div>
-
-                {/* Hidden File Input for Inline Editor Image Upload */}
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  accept="image/*" 
-                  onChange={handleInlineImageUpload} 
-                  className="hidden" 
-                />
-
-                {/* RICH TEXT FORMATTING TOOLBAR */}
-                <div className="flex flex-wrap items-center gap-1.5 p-2 bg-neutral-900 border border-neutral-800 rounded-t-lg select-none">
-                  <button 
-                    type="button" 
-                    onClick={() => formatText('bold')}
-                    className="px-2.5 py-1 text-xs font-extrabold bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-amber-400"
-                    title="Bold"
-                  >
-                    B
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => formatText('italic')}
-                    className="px-2.5 py-1 text-xs italic font-serif bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-amber-400"
-                    title="Italic"
-                  >
-                    I
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => formatText('underline')}
-                    className="px-2.5 py-1 text-xs underline bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-amber-400"
-                    title="Underline"
-                  >
-                    U
-                  </button>
-                  <div className="w-px h-4 bg-neutral-700 mx-1" />
-                  <button 
-                    type="button" 
-                    onClick={() => formatText('formatBlock', '<h3>')}
-                    className="px-2 py-1 text-xs font-bold bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300"
-                  >
-                    H3
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => formatText('formatBlock', '<p>')}
-                    className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300"
-                  >
-                    P
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => formatText('insertUnorderedList')}
-                    className="px-2 py-1 text-xs bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded text-neutral-300"
-                  >
-                    List
-                  </button>
-                  <div className="w-px h-4 bg-neutral-700 mx-1" />
-                  
-                  {/* DIRECT INLINE IMAGE UPLOAD BUTTON */}
-                  <button 
-                    type="button" 
-                    disabled={uploadingImage}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 rounded font-bold flex items-center gap-1.5"
-                  >
-                    📷 {uploadingImage ? 'Uploading Image...' : 'Upload Image to Body'}
-                  </button>
-                </div>
-
-                {/* WYSIWYG CONTENTEDITABLE CONTAINER */}
-                <div 
-                  ref={editorRef}
-                  contentEditable
-                  onInput={(e) => setContent(e.currentTarget.innerHTML)}
-                  className="w-full min-h-[220px] p-4 bg-neutral-900 border border-neutral-800 border-t-0 rounded-b-lg text-sm text-neutral-200 focus:border-amber-500 outline-none leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-3 [&_img]:border [&_img]:border-neutral-800 [&_h3]:text-amber-400 [&_h3]:font-bold [&_h3]:text-base [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-5"
-                />
-              </div>
-
-            </CardContent>
-          </Card>
+                    <div 
+                      ref={editorRef}
+                      contentEditable
+                      onInput={(e) => setContent(e.currentTarget.innerHTML)}
+                      className="w-full min-h-[220px] p-4 bg-neutral-900 border border-neutral-800 border-t-0 rounded-b-lg text-sm text-neutral-200 focus:border-amber-500 outline-none leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg [&_h3]:text-amber-400 [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-5"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           {/* Action Footer */}
           <div className="flex justify-end pt-4">
@@ -722,7 +785,11 @@ export default function AdminDashboardPage() {
               disabled={submitting}
               className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider px-8 py-3 rounded-lg shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all cursor-pointer"
             >
-              {submitting ? 'Publishing Threat Intelligence...' : '🚀 Publish Threat Breakdown'}
+              {submitting 
+                ? 'Processing Entry...' 
+                : reportType === 'daily' 
+                  ? '⚡ Publish to Daily Ledger' 
+                  : '🚀 Publish Threat Breakdown'}
             </Button>
           </div>
 
