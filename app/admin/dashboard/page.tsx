@@ -32,6 +32,9 @@ export default function AdminDashboardPage() {
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Report Type / Target State
+  const [reportType, setReportType] = useState<'both' | 'daily' | 'detailed'>('both')
+
   // Form State
   const [title, setTitle] = useState('')
   const [protocolName, setProtocolName] = useState('')
@@ -197,7 +200,10 @@ export default function AdminDashboardPage() {
       attack_chain: cleanedAttackChain,
       defensive_controls: cleanedDefensiveControls,
       content: editorRef.current?.innerHTML || content,
-      status: 'published'
+      status: 'published',
+      report_type: reportType,
+      is_daily: reportType === 'daily' || reportType === 'both',
+      is_detailed: reportType === 'detailed' || reportType === 'both'
     }
 
     const { error } = await supabase.from('incidents').insert([payload])
@@ -227,6 +233,56 @@ export default function AdminDashboardPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           
+          {/* Target Selection: Daily Ledger vs Detailed Report vs Both */}
+          <Card className="bg-neutral-950 border-amber-500/30 text-white">
+            <CardHeader className="pb-3 border-b border-neutral-900">
+              <CardTitle className="text-xs font-bold text-amber-500 uppercase tracking-wider flex justify-between items-center">
+                <span>Publication Target Feed</span>
+                <span className="text-[10px] text-neutral-400 font-normal">Controls where this incident displays on the main page</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReportType('both')}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    reportType === 'both'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
+                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">Both Feeds (Recommended)</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Daily Ledger Table + Full Technical Report</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportType('daily')}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    reportType === 'daily'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
+                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">Daily Incident Ledger Only</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Fast 24-hr telemetry feed entry</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportType('detailed')}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    reportType === 'detailed'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
+                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">Detailed Technical Report Only</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Full post-mortem & root cause analysis</div>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Section 1: Core Protocol & Network Metadata */}
           <Card className="bg-neutral-950 border-amber-500/20 text-white">
             <CardHeader className="pb-3 border-b border-neutral-900">
